@@ -1,7 +1,6 @@
 """
-RODL Knowledge Chatbot - Streamlit Version
+TechOps Knowledge Base - Streamlit Chatbot
 Deploy to Streamlit Community Cloud for free one-link access.
-
 To run locally: streamlit run streamlit_chatbot.py
 """
 import streamlit as st
@@ -13,7 +12,7 @@ from difflib import SequenceMatcher
 st.set_page_config(
     page_title="TechOps Knowledge Base",
     page_icon="🔍",
-    layout="centered"
+    layout="wide"
 )
 
 # ============================================================
@@ -135,6 +134,56 @@ KNOWLEDGE_BASE = [
     }
 ]
 
+# ============================================================
+# GENERIC RESPONSES
+# ============================================================
+
+GREETINGS = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "howdy", "sup", "what's up", "yo"]
+HELP_WORDS = ["help", "what can you do", "how to use", "commands", "guide", "instructions"]
+THANKS_WORDS = ["thanks", "thank you", "thx", "ty", "appreciate"]
+
+ALL_TOPICS = sorted(set(entry["topic"] for entry in KNOWLEDGE_BASE))
+ALL_SECTIONS = sorted(set(entry["section"] for entry in KNOWLEDGE_BASE))
+
+
+def get_generic_response(query):
+    """Handle generic/conversational messages."""
+    q = query.strip().lower()
+
+    if any(g in q for g in GREETINGS):
+        topics_list = "\n".join(f"  - {t}" for t in ALL_TOPICS)
+        return (
+            "👋 **Hello! Welcome to TechOps Knowledge Base.**\n\n"
+            "I can help you find documents, procedures, links, and resources.\n\n"
+            "**Try searching for:**\n"
+            "- A topic: `SCCM`, `Splunk`, `Ansible`, `POS`\n"
+            "- A procedure: `Troubleshooting`, `Deploy`, `Onboarding`\n"
+            "- A document: `Lab Network`, `VLAN`, `Package Repo`\n\n"
+            f"**Available topics:**\n{topics_list}"
+        )
+
+    if any(h in q for h in HELP_WORDS):
+        return (
+            "ℹ️ **How to use TechOps Knowledge Base:**\n\n"
+            "1. Type a **keyword** in the search box below (e.g., `SCCM`, `Splunk`, `PRP`)\n"
+            "2. I'll find matching documents, procedures, and links\n"
+            "3. Click any 🔗 link to open the resource directly\n\n"
+            "**Tips:**\n"
+            "- Partial words work: `trouble` finds `Troubleshooting`\n"
+            "- Try section names: `POS Infrastructure`, `Retail Operations`\n"
+            "- Try tool names: `Ansible`, `SCCM`, `Splunk`\n\n"
+            f"**Sections available:** {', '.join(ALL_SECTIONS)}"
+        )
+
+    if any(t in q for t in THANKS_WORDS):
+        return "You're welcome! Let me know if you need anything else. 👍"
+
+    if q in ["list all", "show all", "all topics", "topics", "list"]:
+        topics_list = "\n".join(f"  - **{t}**" for t in ALL_TOPICS)
+        return f"📋 **All available topics:**\n\n{topics_list}\n\n_Type any topic name to search._"
+
+    return None
+
 
 # ============================================================
 # SEARCH ENGINE
@@ -164,7 +213,6 @@ def search(query):
         score = 0.0
         matched_links = []
 
-        # Check topic, content, section
         if query_lower in entry["topic"].lower():
             score = 1.0
         if query_lower in entry["content"].lower():
@@ -172,13 +220,11 @@ def search(query):
         if query_lower in entry["section"].lower():
             score = max(score, 0.9)
 
-        # Check links
         for link in entry.get("links", []):
             if query_lower in link["text"].lower():
                 score = max(score, 1.0)
                 matched_links.append(link)
 
-        # Fuzzy fallback
         if score == 0:
             fs = fuzzy_match(query, entry["content"])
             ts = fuzzy_match(query, entry["topic"])
@@ -190,7 +236,7 @@ def search(query):
                 result["links"] = matched_links
             elif entry.get("links"):
                 relevant = [l for l in entry["links"] if query_lower in l["text"].lower()]
-                result["links"] = relevant if relevant else []
+                result["links"] = relevant if relevant else entry["links"]
             results.append({"entry": result, "score": score})
 
     results.sort(key=lambda x: x["score"], reverse=True)
@@ -200,117 +246,94 @@ def search(query):
 
 
 # ============================================================
-# CUSTOM CSS
+# UI LAYOUT
 # ============================================================
 
+# Header
 st.markdown("""
-<style>
-    .stApp {
-        background-color: #0e1117;
-    }
-    .chat-header {
-        text-align: center;
-        padding: 20px 0;
-        border-bottom: 2px solid #1e3a5f;
-        margin-bottom: 20px;
-    }
-    .chat-header h1 {
-        color: #e94560;
-        font-size: 2em;
-        margin: 0;
-    }
-    .chat-header p {
-        color: #8892b0;
-        margin-top: 5px;
-    }
-    .result-card {
-        background: #1a2332;
-        border: 1px solid #1e3a5f;
-        border-radius: 12px;
-        padding: 16px;
-        margin: 10px 0;
-    }
-    .result-card .section-tag {
-        background: #e94560;
-        color: white;
-        padding: 3px 10px;
-        border-radius: 4px;
-        font-size: 0.75em;
-        font-weight: bold;
-    }
-    .result-card .topic {
-        color: #ccd6f6;
-        font-size: 1.1em;
-        font-weight: bold;
-        margin: 10px 0 5px 0;
-    }
-    .result-card .content {
-        color: #8892b0;
-        font-size: 0.9em;
-        margin: 5px 0;
-    }
-    .result-card .link-item {
-        color: #4fc3f7;
-        text-decoration: none;
-        display: block;
-        padding: 4px 0;
-        font-size: 0.9em;
-    }
-    .result-card .link-item:hover {
-        text-decoration: underline;
-    }
-    div[data-testid="stChatMessage"] {
-        background: #1a2332;
-        border: 1px solid #1e3a5f;
-        border-radius: 12px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# CHAT UI
-# ============================================================
-
-st.markdown("""
-<div class="chat-header">
-    <h1>🔍 TechOps Knowledge Base</h1>
-    <p>Search documents, procedures, links, and resources — powered by your team's knowledge</p>
+<div style="text-align:center; padding:10px 0 20px 0; border-bottom:2px solid #1e3a5f; margin-bottom:20px;">
+    <h1 style="color:#e94560; margin:0;">🔍 TechOps Knowledge Base</h1>
+    <p style="color:#8892b0; margin-top:8px; font-size:1.1em;">
+        Search documents, procedures, links, and resources
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
+# Sidebar with quick links
+with st.sidebar:
+    st.markdown("### 📂 Quick Navigation")
+    st.markdown("---")
+    for section in ALL_SECTIONS:
+        st.markdown(f"**{section}**")
+        section_topics = [e["topic"] for e in KNOWLEDGE_BASE if e["section"] == section]
+        for topic in section_topics:
+            st.markdown(f"- {topic}")
+        st.markdown("")
+
+    st.markdown("---")
+    st.markdown("### 💡 Search Tips")
+    st.markdown("""
+    - Type keywords: `SCCM`, `Splunk`
+    - Partial match: `trouble`, `deploy`
+    - Type `help` for instructions
+    - Type `list` to see all topics
+    """)
+
 # Initialize chat history
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [
+        {"role": "assistant", "content": (
+            "👋 **Welcome to TechOps Knowledge Base!**\n\n"
+            "I can help you find documents, procedures, and links.\n\n"
+            "**Try searching for:** `SCCM`, `Splunk`, `Ansible`, `POS`, `Troubleshooting`, `Deploy`, `Onboarding`, `PRP`\n\n"
+            "_Type a keyword below to get started._"
+        )}
+    ]
 
 # Display chat history
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"], unsafe_allow_html=True)
+    with st.chat_message(message["role"], avatar="🔍" if message["role"] == "assistant" else "👤"):
+        st.markdown(message["content"])
 
 # Chat input
-if prompt := st.chat_input("Search for documents, links, or topics... (e.g., SCCM, Splunk, Deploy, PRP)"):
-    # Add user message
+if prompt := st.chat_input("Type a keyword to search (e.g., SCCM, Splunk, Deploy, PRP)..."):
+    # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
 
-    # Search and respond
-    results = search(prompt)
-
-    response_html = ""
-    if not results:
-        response_html = f"❌ No results found for **\"{prompt}\"**. Try different keywords or check spelling."
+    # Check for generic responses first
+    generic = get_generic_response(prompt)
+    if generic:
+        response = generic
     else:
-        response_html = f"**Found {len(results)} result(s):**\n\n"
-        for r in results:
-            entry = r["entry"]
-            response_html += f"---\n"
-            response_html += f"📂 `{entry['section']}` → **{entry['topic']}**\n\n"
-            response_html += f"{entry['content']}\n\n"
-            if entry.get("links"):
-                for link in entry["links"]:
-                    response_html += f"🔗 [{link['text']}]({link['url']})\n\n"
+        # Search knowledge base
+        results = search(prompt)
 
-    st.session_state.messages.append({"role": "assistant", "content": response_html})
-    with st.chat_message("assistant"):
-        st.markdown(response_html, unsafe_allow_html=True)
+        if not results:
+            response = (
+                f"❌ No results found for **\"{prompt}\"**.\n\n"
+                "**Suggestions:**\n"
+                "- Try shorter keywords (e.g., `SCCM` instead of `SCCM Basics`)\n"
+                "- Check spelling\n"
+                "- Type `list` to see all available topics\n"
+                "- Type `help` for usage tips"
+            )
+        else:
+            response = f"✅ **Found {len(results)} result(s) for \"{prompt}\":**\n\n"
+            for r in results:
+                entry = r["entry"]
+                response += f"---\n"
+                response += f"### 📂 {entry['topic']}\n"
+                response += f"**Section:** {entry['section']}\n\n"
+                response += f"{entry['content']}\n\n"
+                if entry.get("links"):
+                    response += "**Links:**\n"
+                    for link in entry["links"]:
+                        response += f"- 🔗 [{link['text']}]({link['url']})\n"
+                    response += "\n"
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    with st.chat_message("assistant", avatar="🔍"):
+        st.markdown(response)
+
